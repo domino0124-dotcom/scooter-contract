@@ -141,6 +141,9 @@
     <label class="first">店名</label>
     <input type="text" id="storeName" value="韋德機車精品">
 
+    <label>客戶姓名 <span style="color:#e0483e">*</span></label>
+    <input type="text" id="customerName" placeholder="請輸入承租人姓名">
+
     <label>租借日期</label>
     <input type="date" id="rentDate">
 
@@ -254,11 +257,8 @@ let lineProfile = { userId: "", displayName: "未登入使用者", pictureUrl: "
 async function initLiff(){
   try{
     await liff.init({ liffId: CONFIG.LIFF_ID });
-    if (!liff.isLoggedIn() && liff.isInClient() === false) {
-      // 在外部瀏覽器開啟時導向登入
-      liff.login();
-      return;
-    }
+    // 不強制導向登入：客人如果沒登入 LINE（例如忘記密碼），
+    // 仍可直接填寫表單送出，改用「客戶姓名」欄位記錄身份。
     if (liff.isLoggedIn()) {
       const profile = await liff.getProfile();
       lineProfile = profile;
@@ -389,13 +389,14 @@ const statusMsg = document.getElementById("statusMsg");
 
 submitBtn.addEventListener("click", async () => {
   const storeName = document.getElementById("storeName").value.trim();
+  const customerName = document.getElementById("customerName").value.trim();
   const rentDate = document.getElementById("rentDate").value;
   const customerPlate = document.getElementById("customerPlate").value.trim();
   const scooterPlate = document.getElementById("scooterPlateSelect").value;
   const agreed = document.getElementById("agreeCheck").checked;
 
-  if (!storeName || !rentDate || !customerPlate) {
-    statusMsg.textContent = "請完整填寫店名、日期與機車維修車輛資料";
+  if (!storeName || !customerName || !rentDate || !customerPlate) {
+    statusMsg.textContent = "請完整填寫店名、客戶姓名、日期與機車維修車輛資料";
     return;
   }
   if (!scooterPlate) { statusMsg.textContent = "請選擇借出之代步車車號"; return; }
@@ -412,7 +413,7 @@ submitBtn.addEventListener("click", async () => {
     statusMsg.textContent = "正在產生合約 PDF...";
     const sigDataUrl = canvas.toDataURL("image/png");
     pdfBlob = await buildContractPdf({
-      storeName, rentDate, customerPlate, scooterPlate,
+      storeName, customerName, rentDate, customerPlate, scooterPlate,
       idPhotoDataUrl, licensePhotoDataUrl, sigDataUrl,
       lineName: lineProfile.displayName
     });
@@ -438,6 +439,7 @@ submitBtn.addEventListener("click", async () => {
     await sendToMakeWebhook({
       lineUserId: lineProfile.userId,
       lineDisplayName: lineProfile.displayName,
+      customerName,
       storeName, rentDate, customerPlate, scooterPlate,
       pdfUrl,
       submittedAt: new Date().toISOString()
@@ -452,7 +454,7 @@ submitBtn.addEventListener("click", async () => {
     if (liff.isInClient && liff.isInClient()) {
       await liff.sendMessages([{
         type: "text",
-        text: `代步車租借合約已完成\n店名：${storeName}\n代步車牌：${scooterPlate}\n合約 PDF：${pdfUrl}`
+        text: `代步車租借合約已完成\n店名：${storeName}\n客戶姓名：${customerName}\n代步車牌：${scooterPlate}\n合約 PDF：${pdfUrl}`
       }]);
     }
   } catch(e){ console.warn("sendMessages 失敗", e); }
@@ -478,7 +480,8 @@ async function buildContractPdf(data){
     <div style="font-size:20px;font-weight:700;margin-bottom:2px;">代步車租借合約</div>
     <div style="font-size:12px;color:#666;margin-bottom:10px;">${data.storeName}　簽署日期：${data.rentDate}</div>
     <table style="width:100%;font-size:12px;margin-bottom:10px;border-collapse:collapse;">
-      <tr><td style="padding:3px 0;color:#666;width:130px;">LINE 使用者</td><td>${data.lineName}</td></tr>
+      <tr><td style="padding:3px 0;color:#666;width:130px;">客戶姓名</td><td>${data.customerName}</td></tr>
+      <tr><td style="padding:3px 0;color:#666;">LINE 使用者</td><td>${data.lineName}</td></tr>
       <tr><td style="padding:3px 0;color:#666;">機車維修車輛</td><td>${data.customerPlate}</td></tr>
       <tr><td style="padding:3px 0;color:#666;">借出之代步車車號</td><td>${data.scooterPlate}</td></tr>
     </table>
