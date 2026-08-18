@@ -449,6 +449,7 @@ submitBtn.addEventListener("click", async () => {
     // 合約已經上傳成功，通知失敗不影響客人，所以不中斷流程
   }
 
+  let lineNotifyFailed = false;
   try{
     // 把合約連結回傳到 LINE 聊天室
     if (liff.isInClient && liff.isInClient()) {
@@ -457,20 +458,28 @@ submitBtn.addEventListener("click", async () => {
         text: `代步車租借合約已完成\n店名：${storeName}\n客戶姓名：${customerName}\n代步車牌：${scooterPlate}\n合約 PDF：${pdfUrl}`
       }]);
     }
-  } catch(e){ console.warn("sendMessages 失敗", e); }
+  } catch(e){
+    console.warn("sendMessages 失敗", e);
+    lineNotifyFailed = true;
+    window.__lastLineError = (e && e.message) ? e.message : JSON.stringify(e);
+  }
 
-  showSuccess(pdfUrl);
+  showSuccess(pdfUrl, lineNotifyFailed);
 });
 
-function showSuccess(pdfUrl){
+function showSuccess(pdfUrl, lineNotifyFailed){
+  const lineNote = lineNotifyFailed
+    ? `<p style="color:#e0483e;">（LINE 確認訊息發送失敗：${window.__lastLineError || "未知原因"}）</p>`
+    : "";
   document.querySelector(".wrap").innerHTML = `
     <div class="card success-box">
       <div class="check">✓</div>
       <h2>合約已送出</h2>
       <p>感謝您完成租借合約簽署</p>
       <p><a href="${pdfUrl}" target="_blank">點此查看合約 PDF</a></p>
+      ${lineNote}
     </div>`;
-  setTimeout(() => { if (liff.isInClient && liff.isInClient()) liff.closeWindow(); }, 2500);
+  setTimeout(() => { if (liff.isInClient && liff.isInClient()) liff.closeWindow(); }, lineNotifyFailed ? 6000 : 2500);
 }
 
 /* ===================== 產生 PDF（把合約畫面截圖後轉存） ===================== */
