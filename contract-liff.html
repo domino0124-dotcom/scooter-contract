@@ -450,6 +450,11 @@ submitBtn.addEventListener("click", async () => {
   }
 
   let lineNotifyFailed = false;
+  const debugInfo = {
+    isInClient: !!(liff.isInClient && liff.isInClient()),
+    isLoggedIn: !!(liff.isLoggedIn && liff.isLoggedIn()),
+    context: (liff.getContext ? liff.getContext() : null)
+  };
   try{
     // 把合約連結回傳到 LINE 聊天室
     if (liff.isInClient && liff.isInClient()) {
@@ -464,12 +469,15 @@ submitBtn.addEventListener("click", async () => {
     window.__lastLineError = (e && e.message) ? e.message : JSON.stringify(e);
   }
 
-  showSuccess(pdfUrl, lineNotifyFailed);
+  showSuccess(pdfUrl, lineNotifyFailed, debugInfo);
 });
 
-function showSuccess(pdfUrl, lineNotifyFailed){
+function showSuccess(pdfUrl, lineNotifyFailed, debugInfo){
   const lineNote = lineNotifyFailed
     ? `<p style="color:#e0483e;">（LINE 確認訊息發送失敗：${window.__lastLineError || "未知原因"}）</p>`
+    : "";
+  const debugNote = debugInfo
+    ? `<p style="color:#999;font-size:11px;word-break:break-all;">[偵錯] isInClient: ${debugInfo.isInClient} / isLoggedIn: ${debugInfo.isLoggedIn} / context: ${JSON.stringify(debugInfo.context)}</p>`
     : "";
   document.querySelector(".wrap").innerHTML = `
     <div class="card success-box">
@@ -478,8 +486,9 @@ function showSuccess(pdfUrl, lineNotifyFailed){
       <p>感謝您完成租借合約簽署</p>
       <p><a href="${pdfUrl}" target="_blank">點此查看合約 PDF</a></p>
       ${lineNote}
+      ${debugNote}
     </div>`;
-  setTimeout(() => { if (liff.isInClient && liff.isInClient()) liff.closeWindow(); }, lineNotifyFailed ? 6000 : 2500);
+  setTimeout(() => { if (liff.isInClient && liff.isInClient()) liff.closeWindow(); }, (lineNotifyFailed || debugInfo) ? 15000 : 2500);
 }
 
 /* ===================== 產生 PDF（把合約畫面截圖後轉存） ===================== */
