@@ -281,6 +281,33 @@ initLiff();
 let idPhotoDataUrl = "";
 let licensePhotoDataUrl = "";
 
+// 壓縮圖片：手機相機照片常常 3-8MB，會導致行動網路上傳逾時失敗。
+// 這裡把圖片縮小到最長邊 1280px、轉成品質 0.8 的 JPEG，通常可以壓到 200-500KB。
+function compressImage(dataUrl, maxSize = 1280, quality = 0.8){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxSize || height > maxSize) {
+        if (width > height) {
+          height = Math.round(height * (maxSize / width));
+          width = maxSize;
+        } else {
+          width = Math.round(width * (maxSize / height));
+          height = maxSize;
+        }
+      }
+      const c = document.createElement("canvas");
+      c.width = width;
+      c.height = height;
+      c.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve(c.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
 function setupPhotoUpload(boxId, inputId, retakeId, label, onLoaded){
   const box = document.getElementById(boxId);
   const input = document.getElementById(inputId);
@@ -292,12 +319,22 @@ function setupPhotoUpload(boxId, inputId, retakeId, label, onLoaded){
   input.addEventListener("change", () => {
     const file = input.files[0];
     if (!file) return;
+    box.innerHTML = `<div class="icon">⏳</div><div class="main-t">處理照片中...</div>`;
     const reader = new FileReader();
-    reader.onload = (e) => {
-      onLoaded(e.target.result);
-      box.classList.add("has-img");
-      box.innerHTML = `<img src="${e.target.result}" alt="${label}">`;
-      retakeBtn.style.display = "block";
+    reader.onload = async (e) => {
+      try {
+        const compressed = await compressImage(e.target.result);
+        onLoaded(compressed);
+        box.classList.add("has-img");
+        box.innerHTML = `<img src="${compressed}" alt="${label}">`;
+        retakeBtn.style.display = "block";
+      } catch (err) {
+        // 壓縮失敗就退回原圖，至少不會卡住流程
+        onLoaded(e.target.result);
+        box.classList.add("has-img");
+        box.innerHTML = `<img src="${e.target.result}" alt="${label}">`;
+        retakeBtn.style.display = "block";
+      }
     };
     reader.readAsDataURL(file);
   });
@@ -369,18 +406,34 @@ submitBtn.addEventListener("click", async () => {
 
   submitBtn.disabled = true;
 
+  let pdfBlob, pdfUrl;
+
   try{
     statusMsg.textContent = "正在產生合約 PDF...";
     const sigDataUrl = canvas.toDataURL("image/png");
-    const pdfBlob = await buildContractPdf({
+    pdfBlob = await buildContractPdf({
       storeName, rentDate, customerPlate, scooterPlate,
       idPhotoDataUrl, licensePhotoDataUrl, sigDataUrl,
       lineName: lineProfile.displayName
     });
+  } catch(err){
+    console.error(err);
+    statusMsg.textContent = "產生 PDF 失敗，請重新拍照後再試一次";
+    submitBtn.disabled = false;
+    return;
+  }
 
-    statusMsg.textContent = "正在上傳合約...";
-    const pdfUrl = await uploadPdfToSupabase(pdfBlob, customerPlate);
+  try{
+    statusMsg.textContent = "正在上傳合約（訊號不穩可能需要多等一下）...";
+    pdfUrl = await uploadPdfToSupabase(pdfBlob, customerPlate);
+  } catch(err){
+    console.error(err);
+    statusMsg.textContent = "上傳合約失敗，請確認網路後點「確認送出」重試";
+    submitBtn.disabled = false;
+    return;
+  }
 
+  try{
     statusMsg.textContent = "正在通知店家...";
     await sendToMakeWebhook({
       lineUserId: lineProfile.userId,
@@ -389,24 +442,22 @@ submitBtn.addEventListener("click", async () => {
       pdfUrl,
       submittedAt: new Date().toISOString()
     });
+  } catch(err){
+    console.warn("Webhook 通知失敗，但合約已上傳成功", err);
+    // 合約已經上傳成功，通知失敗不影響客人，所以不中斷流程
+  }
 
+  try{
     // 把合約連結回傳到 LINE 聊天室
     if (liff.isInClient && liff.isInClient()) {
-      try{
-        await liff.sendMessages([{
-          type: "text",
-          text: `代步車租借合約已完成\n店名：${storeName}\n代步車牌：${scooterPlate}\n合約 PDF：${pdfUrl}`
-        }]);
-      } catch(e){ console.warn("sendMessages 失敗", e); }
+      await liff.sendMessages([{
+        type: "text",
+        text: `代步車租借合約已完成\n店名：${storeName}\n代步車牌：${scooterPlate}\n合約 PDF：${pdfUrl}`
+      }]);
     }
+  } catch(e){ console.warn("sendMessages 失敗", e); }
 
-    showSuccess(pdfUrl);
-
-  } catch(err){
-    console.error(err);
-    statusMsg.textContent = "送出失敗：" + (err.message || "請稍後再試");
-    submitBtn.disabled = false;
-  }
+  showSuccess(pdfUrl);
 });
 
 function showSuccess(pdfUrl){
