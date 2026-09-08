@@ -124,10 +124,8 @@ const SCOOTER_OPTIONS = [
   "勁風光-983-KQJ"
 ];
 
-/* 還車登記要送去的 Make.com Webhook 網址
-   （這裡先放一個佔位字串，等你在 Make.com 建好「還車登記」webhook 場景後，
-   把網址貼進來替換掉下面這一行） */
-const RETURN_WEBHOOK_URL = "請貼上你在 Make.com 新建的「還車登記」Webhook 網址";
+/* 還車登記要送去的 Make.com Webhook 網址 */
+const RETURN_WEBHOOK_URL = "https://hook.eu1.make.com/9clir5utoqrk1su4vby8ymbshsfayn2k";
 
 /* ====== 密碼驗證 ====== */
 const pinInput = document.getElementById("pinInput");
@@ -183,7 +181,6 @@ submitBtn.addEventListener("click", async () => {
   try {
     const res = await fetch(RETURN_WEBHOOK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scooterPlate,
         returnDate,
