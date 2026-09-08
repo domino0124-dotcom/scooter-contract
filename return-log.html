@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>代步車還車登記</title>
+
+<style>
+  :root{
+    --blue:#3B6FE0;
+    --blue-dark:#2f58b8;
+    --bg:#f2f3f5;
+    --card:#ffffff;
+    --text:#1c1c1e;
+    --muted:#8a8a8e;
+    --border:#e5e5ea;
+    --green:#2fa84f;
+    --red:#e0483e;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding-bottom:60px;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:16px;}
+  .card{
+    background:var(--card);
+    border-radius:14px;
+    padding:20px;
+    margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  }
+  h1{font-size:19px;margin:0 0 4px;}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px;}
+
+  label{display:block;font-size:14px;font-weight:600;margin:14px 0 6px;}
+  label.first{margin-top:0;}
+  input[type=date], input[type=time], select{
+    width:100%;padding:11px 12px;border:1px solid var(--border);
+    border-radius:10px;font-size:15px;background:#fafafa;
+  }
+  input:focus, select:focus{outline:none;border-color:var(--blue);background:#fff;}
+
+  .btn{
+    width:100%;padding:14px;border:none;border-radius:12px;
+    background:var(--blue);color:#fff;font-size:16px;font-weight:700;
+    cursor:pointer;margin-top:8px;
+  }
+  .btn:active{background:var(--blue-dark);}
+  .btn:disabled{background:#c7c7cc;}
+
+  .status{font-size:13px;color:var(--red);margin-top:10px;min-height:16px;}
+
+  .success-box{text-align:center;padding:36px 20px;}
+  .check{font-size:52px;color:var(--green);margin-bottom:10px;}
+  .success-box h2{margin:0 0 8px;font-size:20px;}
+  .success-box p{color:var(--muted);font-size:14px;margin:4px 0;}
+  .success-box .detail{color:var(--text);font-weight:600;}
+
+  /* 密碼保護畫面 */
+  #pinGate{
+    position:fixed;inset:0;background:var(--bg);
+    display:flex;align-items:center;justify-content:center;
+    z-index:100;
+  }
+  .pin-card{
+    background:var(--card);border-radius:14px;padding:28px 24px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:320px;text-align:center;
+  }
+  .pin-card h2{font-size:17px;margin:0 0 16px;}
+  .pin-card input{
+    width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;
+    font-size:20px;text-align:center;letter-spacing:6px;background:#fafafa;margin-bottom:12px;
+  }
+  .pin-card input:focus{outline:none;border-color:var(--blue);background:#fff;}
+  .pin-card .pin-error{color:var(--red);font-size:13px;min-height:16px;margin-bottom:8px;}
+</style>
+</head>
+<body>
+
+<!-- ====== 密碼保護畫面（僅店家知道密碼才能進入） ====== -->
+<div id="pinGate">
+  <div class="pin-card">
+    <h2>🔒 店家專用，請輸入密碼</h2>
+    <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="請輸入密碼" autofocus>
+    <div class="pin-error" id="pinError"></div>
+    <button class="btn" id="pinBtn">確認</button>
+  </div>
+</div>
+
+<div class="wrap" id="mainWrap" style="display:none;">
+  <div class="card">
+    <h1 class="first">代步車還車登記</h1>
+    <p class="sub">填寫還車日期與時間，送出後即完成記錄</p>
+  </div>
+
+  <div class="card" id="formCard">
+    <label class="first">代步車車號 <span style="color:#e0483e">*</span></label>
+    <select id="scooterPlateSelect">
+      <option value="" selected disabled>請選擇代步車車號</option>
+    </select>
+
+    <label>還車日期 <span style="color:#e0483e">*</span></label>
+    <input type="date" id="returnDate">
+
+    <label>還車時間 <span style="color:#e0483e">*</span></label>
+    <input type="time" id="returnTime" step="1">
+
+    <button class="btn" id="submitBtn">確認還車</button>
+    <div class="status" id="statusMsg"></div>
+  </div>
+</div>
+
+<script>
+/* ====== 設定：跟合約表單共用同一份車號清單 ====== */
+const RETURN_PIN = "8888"; // 店家專用密碼，只有知道這組密碼的人才能填寫還車登記
+
+const SCOOTER_OPTIONS = [
+  "三代戰-368-KPH",
+  "三代戰-777-NJZ",
+  "勁風光-983-KQJ"
+];
+
+/* 還車登記要送去的 Make.com Webhook 網址
+   （這裡先放一個佔位字串，等你在 Make.com 建好「還車登記」webhook 場景後，
+   把網址貼進來替換掉下面這一行） */
+const RETURN_WEBHOOK_URL = "請貼上你在 Make.com 新建的「還車登記」Webhook 網址";
+
+/* ====== 密碼驗證 ====== */
+const pinInput = document.getElementById("pinInput");
+const pinBtn = document.getElementById("pinBtn");
+const pinError = document.getElementById("pinError");
+const pinGate = document.getElementById("pinGate");
+const mainWrap = document.getElementById("mainWrap");
+
+function checkPin(){
+  if (pinInput.value === RETURN_PIN) {
+    pinGate.style.display = "none";
+    mainWrap.style.display = "block";
+  } else {
+    pinError.textContent = "密碼錯誤，請再試一次";
+    pinInput.value = "";
+    pinInput.focus();
+  }
+}
+pinBtn.addEventListener("click", checkPin);
+pinInput.addEventListener("keydown", (e) => { if (e.key === "Enter") checkPin(); });
+
+/* ====== 初始化 ====== */
+const scooterSelectEl = document.getElementById("scooterPlateSelect");
+SCOOTER_OPTIONS.forEach((plate) => {
+  const opt = document.createElement("option");
+  opt.value = plate;
+  opt.textContent = plate;
+  scooterSelectEl.appendChild(opt);
+});
+
+// 預設帶入現在日期與時間，方便店家直接確認送出
+const now = new Date();
+document.getElementById("returnDate").value = now.toISOString().slice(0,10);
+document.getElementById("returnTime").value = now.toTimeString().slice(0,8);
+
+/* ====== 送出 ====== */
+const submitBtn = document.getElementById("submitBtn");
+const statusMsg = document.getElementById("statusMsg");
+
+submitBtn.addEventListener("click", async () => {
+  const scooterPlate = scooterSelectEl.value;
+  const returnDate = document.getElementById("returnDate").value;
+  const returnTime = document.getElementById("returnTime").value;
+
+  if (!scooterPlate) { statusMsg.textContent = "請選擇代步車車號"; return; }
+  if (!returnDate) { statusMsg.textContent = "請選擇還車日期"; return; }
+  if (!returnTime) { statusMsg.textContent = "請選擇還車時間"; return; }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "送出中...";
+  statusMsg.textContent = "";
+
+  try {
+    const res = await fetch(RETURN_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scooterPlate,
+        returnDate,
+        returnTime,
+        loggedAt: new Date().toISOString()
+      })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error("送出失敗：" + errText);
+    }
+    showSuccess(scooterPlate, returnDate, returnTime);
+  } catch (e) {
+    statusMsg.textContent = e.message || "送出失敗，請檢查網路後再試一次";
+    submitBtn.disabled = false;
+    submitBtn.textContent = "確認還車";
+  }
+});
+
+function showSuccess(scooterPlate, returnDate, returnTime){
+  document.querySelector(".wrap").innerHTML = `
+    <div class="card success-box">
+      <div class="check">✓</div>
+      <h2>還車登記完成</h2>
+      <p>代步車車號</p>
+      <p class="detail">${scooterPlate}</p>
+      <p>還車時間</p>
+      <p class="detail">${returnDate} ${returnTime}</p>
+    </div>`;
+}
+</script>
+
+</body>
+</html>
