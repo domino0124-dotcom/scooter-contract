@@ -455,7 +455,7 @@ submitBtn.addEventListener("click", async () => {
     if (liff.isInClient && liff.isInClient()) {
       await liff.sendMessages([{
         type: "text",
-        text: `代步車租借合約已完成\n店名：${storeName}\n客戶姓名：${customerName}\n代步車牌：${scooterPlate}\n合約 PDF：${pdfUrl}`
+        text: `代步車租借合約已完成\n店名：${storeName}\n客戶姓名：${customerName}\n代步車牌：${scooterPlate}\n合約 PDF：${pdfUrl}\n\n----------\n代步車還車登記資訊（店家使用，請勿填寫）\nhttps://domino0124-dotcom.github.io/scooter-contract/return-log.html`
       }]);
     }
   } catch(e){
