@@ -60,6 +60,23 @@
   .success-box p{color:var(--muted);font-size:14px;margin:4px 0;}
   .success-box .detail{color:var(--text);font-weight:600;}
 
+  /* 複製訊息區塊 */
+  .copy-box{
+    text-align:left;margin-top:22px;padding-top:18px;border-top:1px solid var(--border);
+  }
+  .copy-box .copy-label{font-size:13px;color:var(--muted);margin-bottom:8px;text-align:center;}
+  .copy-text{
+    background:#f7f7f8;border:1px solid var(--border);border-radius:10px;
+    padding:14px;font-size:14.5px;line-height:1.6;white-space:pre-wrap;
+    color:var(--text);text-align:left;
+  }
+  .copy-btn{
+    width:100%;padding:13px;border:none;border-radius:12px;
+    background:var(--green);color:#fff;font-size:15px;font-weight:700;
+    cursor:pointer;margin-top:10px;
+  }
+  .copy-btn.copied{background:#8a8a8e;}
+
   /* 密碼保護畫面 */
   #pinGate{
     position:fixed;inset:0;background:var(--bg);
@@ -201,6 +218,13 @@ submitBtn.addEventListener("click", async () => {
 });
 
 function showSuccess(scooterPlate, returnDate, returnTime){
+  // 給客人的通知訊息內容，店家可以直接複製貼到 LINE 聊天室傳給客人
+  const customerMsg =
+`您好，代步車（${scooterPlate}）已完成歸還登記，
+還車時間：${returnDate} ${returnTime}
+感謝您的使用，祝您騎車平安！
+—— 韋德機車精品`;
+
   document.querySelector(".wrap").innerHTML = `
     <div class="card success-box">
       <div class="check">✓</div>
@@ -209,7 +233,33 @@ function showSuccess(scooterPlate, returnDate, returnTime){
       <p class="detail">${scooterPlate}</p>
       <p>還車時間</p>
       <p class="detail">${returnDate} ${returnTime}</p>
+
+      <div class="copy-box">
+        <div class="copy-label">複製下方訊息傳給客人：</div>
+        <div class="copy-text" id="copyText">${customerMsg}</div>
+        <button class="copy-btn" id="copyBtn">📋 複製訊息</button>
+      </div>
     </div>`;
+
+  const copyBtn = document.getElementById("copyBtn");
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(customerMsg);
+      copyBtn.textContent = "✓ 已複製，貼給客人吧";
+      copyBtn.classList.add("copied");
+    } catch (e) {
+      // 部分瀏覽器不支援 clipboard API，退回選取文字讓使用者手動複製
+      const range = document.createRange();
+      range.selectNode(document.getElementById("copyText"));
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+      copyBtn.textContent = "請手動長按選取文字複製";
+    }
+    setTimeout(() => {
+      copyBtn.textContent = "📋 複製訊息";
+      copyBtn.classList.remove("copied");
+    }, 2500);
+  });
 }
 </script>
 
