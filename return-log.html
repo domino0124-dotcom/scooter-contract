@@ -179,14 +179,14 @@ submitBtn.addEventListener("click", async () => {
   statusMsg.textContent = "";
 
   try {
-    const res = await fetch(RETURN_WEBHOOK_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        scooterPlate,
-        returnDate,
-        returnTime,
-        loggedAt: new Date().toISOString()
-      })
+    const params = new URLSearchParams({
+      scooterPlate,
+      returnDate,
+      returnTime,
+      loggedAt: new Date().toISOString()
+    });
+    const res = await fetch(RETURN_WEBHOOK_URL + "?" + params.toString(), {
+      method: "GET"
     });
     if (!res.ok) {
       const errText = await res.text();
